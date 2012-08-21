@@ -1,4 +1,4 @@
-This project contains some small tools, such as:
+﻿This project contains some small tools, such as:
 greasemonkey-scripts:    Some greasemonkey scripts that I used to automate some stuff.
 notepadplusplus-plugins: Some python scripts to extend notepad++ functions.
 
