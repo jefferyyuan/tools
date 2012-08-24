@@ -1,8 +1,8 @@
 ﻿# -*- coding: utf-8 -*-
 #This notepadd++ plugin will convert the selected text from SBC to DBC cases in Notepad++: such as from ＂ｈｅｌｌｏ　ｗｏｒｌｄ＂to "hello world" 全角转半角
-# For more information, please refer to https://plus.google.com/101157854606139706613/posts/68pAvApmZ34
+# For more information, please refer: https://plus.google.com/101157854606139706613/posts/68pAvApmZ34
 
-# About how to use python to extend notepad++ function, please refer to 
+# About how to use python to extend notepad++ function, please refer: 
 # http://npppythonscript.sourceforge.net/
 def SBCToDBC(ustring):
     '''From http://bbs.chinaunix.net/thread-1762033-1-1.html'''
