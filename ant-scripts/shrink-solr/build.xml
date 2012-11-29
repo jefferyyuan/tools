@@ -1,0 +1,280 @@
+<project name="MyProject" default="all" basedir="." xmlns:ac="antlib:net.sf.antcontrib">
+	<taskdef resource="net/sf/antcontrib/antlib.xml"/>
+	<!-- refer to http://proguard.sourceforge.net/index.html#manual/ant.html 
+	<taskdef resource="proguard/ant/task.properties"
+         classpath="C:\jeffery\jyuan-stuff\Google Drive\software\work\shrinker\proguard4.8\lib\proguard.jar" />
+    <property name="original.runtime.home" value="C:\jeffery\jyuan-stuff\Google Drive\software\work\environment\offline-cache\runtime4.0"/>
+		 
+	<taskdef resource="proguard/ant/task.properties"
+         classpath="..\..\shrinker\proguard4.8\lib\proguard.jar" />
+	<property name="..\offline-cache\runtime4.0"/>
+	  work
+		<taskdef resource="proguard/ant/task.properties"
+         classpath="C:\jeffery\jyuan-stuff\Google Drive\software\work\shrinker\proguard4.8\lib\proguard.jar" />
+	<property name="C:\jeffery\jyuan-stuff\Google Drive\software\work\environment\offline-cache\runtime4.0"/>
+	-->
+
+	<taskdef resource="proguard/ant/task.properties"
+         classpath="C:\jeffery\jyuan-stuff\Google Drive\software\work\shrinker\proguard4.8\lib\proguard.jar" />
+	<property name="original.runtime.home" value="C:\jeffery\jyuan-stuff\Google Drive\software\work\environment\offline-cache\runtime4.0"/>
+	<property name="original.runtime.home.lib" value="${original.runtime.home}\lib"/>
+	<property name="original.solr.war.lib" value="${original.runtime.home}\solr.war\WEB-INF\lib"/>
+	<property name="original.solr.core.lib" value="${original.runtime.home}\solr-home\collection1\lib"/>
+
+	<property name="runtime.home" value="C:\jeffery\software\environment\shrink4.0"/>
+	<property name="runtime.solr.home" value="${runtime.home}/solr-home"/>
+	<property name="runtime.solr.core.home" value="${runtime.solr.home}/collection1"/>
+	<property name="runtime.home.lib" value="${runtime.home}\lib"/>
+	<property name="runtime.solr.war" value="${runtime.home}\solr.war"/>
+	<property name="runtime.solr.war.lib" value="${runtime.home}\solr.war\WEB-INF\lib"/>
+	<property name="runtime.solr.core.lib" value="${runtime.solr.home}\collection1\lib"/>
+
+	<property name="shrinked.solr.jars.input" value="${basedir}\solr.jars"/>
+	<property name="shrinked.jetty.jars.input" value="${basedir}\jetty.jars"/>
+
+	<property name="shrinked.solr.jars.output" value="${basedir}\shrinked.solr.jars"/>
+	<property name="shrinked.jetty.jars.output" value="${basedir}\shrinked.jetty.jars"/>
+	<property name="final.jars.output" value="${basedir}\final.jars"/>
+	<property name="shrinked.xml.output" value="${basedir}\shrinked.xml"/>
+
+	<target name="all" depends="copyToSolr,shrinkRuntimeXMLs, shrinkPropertyFiles, runSolr, clean">
+	</target>
+	<target name="clean">
+		<delete dir="${shrinked.solr.jars.input}"/>
+		<delete dir="${shrinked.jetty.jars.input}"/>
+		<delete dir="${shrinked.solr.jars.output}"/>
+		<delete dir="${shrinked.jetty.jars.output}"/>
+		<delete dir="${final.jars.output}"/>
+		<delete dir="${shrinked.xml.output}"/>
+	</target>
+
+	<target name="init" depends="clean">
+		<mkdir dir="${shrinked.solr.jars.input}"/>
+		<mkdir dir="${shrinked.jetty.jars.input}"/>
+		<mkdir dir="${shrinked.solr.jars.output}"/>
+		<mkdir dir="${shrinked.jetty.jars.output}"/>
+		<mkdir dir="${final.jars.output}"/>
+		<mkdir dir="${shrinked.xml.output}"/>
+	</target>
+
+	<target name="copyOrginalJars" depends="init">
+		<echo message="original.runtime.home ${original.runtime.home}"/>
+		<copy file="${original.runtime.home}/startjetty.jar" todir="${shrinked.jetty.jars.input}"/>
+		<copy file="${original.runtime.home.lib}/servlet-api-3.0.jar" todir="${shrinked.jetty.jars.input}"/>
+		<copy file="${original.runtime.home.lib}/jetty.jar" todir="${shrinked.jetty.jars.input}"/>
+
+		<copy todir="${shrinked.solr.jars.input}">
+			<fileset dir="${original.solr.war.lib}" includes="*.jar"/>
+			<fileset dir="${original.solr.core.lib}" includes="*.jar"/>
+		</copy>		
+
+	</target>
+	<target name="postProcess" depends="copyOrginalJars">
+		<!-- deleted unneeded jars -->
+		<delete verbose="true">
+			<fileset dir="${shrinked.solr.jars.input}">
+				<include name="lucene-grouping**"/>
+				<include name="lucene-memory**"/>
+				<include name="lucene-spatial**"/>
+				<include name="commons-cli**"/>
+				<include name="commons-lang**"/>
+				<include name="commons-codec**"/>
+				<!-- TODO -->
+				<include name="wstx-asl**"/>
+				<!-- if remove this, there will be no log -->
+				<!-- <include name="slf4j-jdk14**"/> -->
+				<include name="guava**"/>
+				<include name="lucene-analyzers-kuromoji**"/>
+			</fileset>
+		</delete>
+		<antcall target="shrink.zookeeper"/>
+	</target>
+
+	<target name="shrink.zookeeper">
+		<path id="zookeeper.jar.path">
+			<fileset dir="${shrinked.solr.jars.input}">
+				<include name="zookeeper*.jar" />
+			</fileset>
+		</path>
+		<property name="zookeeper.jar" refid="zookeeper.jar.path"/>
+		<echo message="zookeeper.jar: ${zookeeper.jar}" />
+		<!-- remove unneeded classes from zookeeper, only keep org.apache.zookeeper.KeeperException -->
+		<zip file="${zookeeper.jar}-removed">
+			<zipfileset src="${zookeeper.jar}">	
+				<include name="org/apache/zookeeper/KeeperException**"/>
+			</zipfileset>
+		</zip>
+		<delete dir="${zookeeper.jar}"/>
+		<move file="${zookeeper.jar}-removed" tofile="${zookeeper.jar}"/>
+	</target>
+
+	<target name="shrinkJetty" depends="postProcess">
+		<proguard configuration="conf-jetty.txt"/>
+	</target>
+
+	<target name="shrinkSolr" depends="postProcess">
+		<proguard configuration="conf-solr.txt"/>
+	</target>
+	<target name="removeFiles" depends="shrinkJetty, shrinkSolr">
+		<!-- view file:///C:/jeffery/software/src/apache/ant-contrib-1.0b2-bin/ant-contrib/docs/tasks/index.html !-->  
+		<ac:foreach target="remove.files.fromjars" param="file.name">
+			<path>
+				<fileset dir="${shrinked.jetty.jars.output}" includes="*.jar"/>
+				<fileset dir="${shrinked.solr.jars.output}" includes="*.jar"/>
+			</path>
+		</ac:foreach>
+	</target>
+
+	<target name="remove.files.fromjars">
+		<echo message="${file.name}"/>
+		<basename property="file.basename" file="${file.name}"/>
+		<echo message="${file.basename}"/>
+		<zip file="${final.jars.output}/${file.basename}">
+			<zipfileset src="${file.name}">
+				<exclude name="META-INF/MANIFEST.MF"/>
+				<exclude name="META-INF/LICENSE.txt"/>
+				<exclude name="META-INF/NOTICE.txt"/>
+				<exclude name="org/eclipse/jetty/favicon.ico"/>
+				<exclude name="META-INF/maven/**"/>				
+			</zipfileset>
+		</zip>
+	</target>
+	<target name="replaceClasses" depends="removeFiles">
+		<!-- how to get apth of a regular-expression-mathced file
+		http://ant.1045680.n5.nabble.com/how-to-file-path-from-fileset-td1351361.html
+		-->
+		<path id="final.solrj.path">
+			<fileset dir="${final.jars.output}">
+				<include name="apache-solr-solrj*.jar"/>
+			</fileset>
+		</path>
+		<property name="final.solrj" refid="final.solrj.path" />
+		<echo message="replace some classes from: ${final.solrj}"/>
+		<zip file="${final.solrj}-tmp" update="true">
+			<zipfileset src="${final.solrj}" >
+				<exclude name="org\apache\solr\common\SolrInputDocument.class"/>
+				<exclude name="org\apache\solr\common\SolrInputField$1.class"/>
+				<exclude name="org\apache\solr\common\SolrInputField.class"/>
+			</zipfileset>
+			<fileset dir="${original.solr.war.lib}\replacedclasses">
+				<include name="**"/>
+			</fileset>
+		</zip>
+		<move file="${final.solrj}-tmp" tofile="${final.solrj}"/>
+	</target>
+	<target name="copyToSolr" depends="removeFiles, replaceClasses">
+		<delete dir="${runtime.home.lib}"/>
+		<delete file="${runtime.home}/startjetty.jar"/>
+		<copy file="${final.jars.output}/startjetty.jar" todir="${runtime.home}"/>
+		<copy todir="${runtime.home.lib}">
+			<fileset dir="${final.jars.output}">
+				<include name="jetty.jar"/>
+				<include name="servlet-api*.jar"/>
+			</fileset>
+		</copy>
+		
+		<delete dir="${runtime.solr.war.lib}"/>
+		<copy todir="${runtime.solr.war.lib}">
+			<fileset dir="${final.jars.output}">
+				<exclude name="startjetty.jar"/>
+				<exclude name="servlet-api-3.0.jar"/>
+				<exclude name="jetty.jar"/>
+				<exclude name="myextension.jar"/>
+				<exclude name="apache-solr-dataimporthandler*.jar"/>
+			</fileset>
+		</copy>			
+		<delete dir="${runtime.solr.core.lib}"/>
+		<copy todir="${runtime.solr.core.lib}">
+			<fileset dir="${final.jars.output}">
+				<include name="apache-solr-dataimporthandler*.jar"/>
+				<include name="myextension.jar"/>
+			</fileset>
+		</copy>
+	</target>
+
+	<target name="shrinkRuntimeXMLs">
+		<path id="orignal.xmls.path">
+			<fileset dir="${runtime.solr.core.home}/conf/">
+				<include name="*.xml" />
+			</fileset>
+		</path>
+
+		<property name="orignal.xmls" refid="orignal.xmls.path" />
+		<echo message="orignal.xmls: ${orignal.xmls}" />
+		<ac:foreach list="${orignal.xmls};${runtime.solr.home}/solr.xml;${runtime.solr.war}/WEB-INF/web.xml" delimiter=";" param="original.xml" target="shrinkXml"/>
+	</target>
+	<target name="shrinkXml">
+		<basename property="original.xml.basename" file="${original.xml}"/>
+		<dirname property="original.xml.dirname" file="${original.xml}"/>
+		<echo message="original.xml: ${original.xml}"/>
+		<xslt basedir="${original.xml.dirname}" includes="${original.xml.basename}" destdir="${shrinked.xml.output}"
+       extension=".xml" style="shrink.xslt"/>
+		<move file="${shrinked.xml.output}/${original.xml.basename}" tofile="${original.xml}"/>
+	</target>
+
+	<target name="shrinkPropertyFiles">
+		<path id="orignal.properties.path">
+			<fileset dir="${runtime.solr.core.home}/conf/">
+				<include name="*.txt" />
+			</fileset>
+		</path>
+		<property name="orignal.properties" refid="orignal.properties.path" />
+		<ac:foreach list="${orignal.properties}" delimiter=";" param="original.propertyFile" target="shrinkPropertyFile"/>
+	</target>
+	<target name="shrinkPropertyFile">
+		<!-- replaceregexp deosn't wookr: see: http://ant.1045680.n5.nabble.com/Regular-expression-for-deleting-new-lines-with-Ant-td1356028.html
+		http://stackoverflow.com/questions/1765847/deleting-new-lines-with-regular-expression-from-ant-task
+	<replaceregexp file="C:\jeffery\software\environment\shrink4.0\solr-home\collection1\conf\stopwords.txt"
+		match="^\s*\n"
+		replace=""
+		flags="g" />
+		<replaceregexp file="C:\jeffery\software\environment\shrink4.0\solr-home\collection1\conf\stopwords.txt"
+               match="^#.*\n"
+               replace=""
+               byline="true"/>
+			   -->
+		<replaceregexp file="${original.propertyFile}"
+               match="^#.*"
+               replace=""
+               byline="true"/>
+		<copy file="${original.propertyFile}" toFile="${original.propertyFile}-tmp">
+			<filterchain>
+				<ignoreblank/>
+			</filterchain>
+		</copy>
+		<move file="${original.propertyFile}-tmp" tofile="${original.propertyFile}"/>
+	</target>
+	<target name="shrinkRuntime" depends="copyToSolr">
+		<delete dir="${runtime.solr.core.home}/data"/>
+		<delete dir="${runtime.solr.core.home}/conf/velocity"/>
+		<delete dir="${runtime.solr.core.home}/conf/xslt"/>
+		<delete dir="${runtime.solr.core.home}/conf/lang"/>
+		<delete file="${runtime.solr.home}/zoo.cfg"/>
+		<fileset dir="${runtime.solr.core.home}/conf/">
+			<include name="update-script"/>
+			<include name="cvimport.properties"/>
+			<include name="dataimport.properties"/>
+			<include name="admin-extra.menu-bottom.html"/>
+			<include name="admin-extra.menu-top.html"/>
+			<include name="admin-extra.html"/>
+			<include name="scripts.conf"/>
+
+			<include name="currency.xml"/>
+			<include name="mapping-FoldToASCII.txt"/>
+			<include name="mapping-ISOLatin1Accent.txt"/>
+			<include name="spellings.txt"/>
+		</fileset>
+	</target>
+
+
+	<target name="runSolr">
+		<java classname="com.mypackage.solr.SolrJettyServer"> 
+			<classpath>
+				<fileset dir="${runtime.home}\lib">
+					<include name="*.jar"/>
+				</fileset>
+				<pathelement location="${runtime.home}/startjetty.jar"/>
+			</classpath>
+		</java>
+	</target>
+</project>
